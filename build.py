@@ -268,7 +268,7 @@ def build(options: BuildOptions) -> int:
         "program",
         PROGRAM_NAME,
         mode=options.mode,
-        binary_dir=venv_path,
+        binary_dir=f"{venv_path}/bin",
         dependencies=DEPENDENCIES,
         additional_flags=ADDITIONAL_FLAGS,
     )
