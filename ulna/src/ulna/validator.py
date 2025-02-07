@@ -340,17 +340,3 @@ class Builder:
             sections=self._sections,
             for_type=for_type,
         )
-
-
-def check_type[T](
-    value: typing.Any,
-    predicate: typing.Callable[[typing.Any], typing.TypeGuard[T]],
-) -> option.Option[T]:
-    """
-    Determine whether `value` satisfies the type `predicate`.
-    """
-
-    if predicate(value):
-        return option.Some(value)
-
-    return option.Nothing()
