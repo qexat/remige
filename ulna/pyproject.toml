@@ -17,8 +17,7 @@ name = "Qexat"
 email = "contact@qexat.com"
 
 [project.urls]
-# TODO: update with subdir
-repository = "https://github.com/qexat/remige"
+repository = "https://github.com/qexat/remige/tree/main/ulna"
 
 [project.scripts]
 ulna = "ulna.__main__:main"
