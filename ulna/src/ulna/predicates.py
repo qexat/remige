@@ -55,13 +55,24 @@ def is_any_dict(
     return isinstance(value, dict)
 
 
+def _is_identifier_particle(particle: str) -> bool:
+    return all(
+        "A" <= char <= "Z" or "a" <= char <= "z" or char == "_"
+        for char in particle
+    )
+
+
 def is_project_identifier(value: typing.Any) -> typing.TypeGuard[str]:
     """
     Determine whether `value` is a project identifier.
     """
 
-    # TODO: use my own identifier conventions
-    return isinstance(value, str) and value.isidentifier()
+    if not isinstance(value, str):
+        return False
+
+    particles = value.split("-")
+
+    return all(_is_identifier_particle(particle) for particle in particles)
 
 
 def is_compiler_name(
