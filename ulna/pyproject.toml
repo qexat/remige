@@ -1,0 +1,28 @@
+[project]
+name = "ulna"
+description = "A simple build system for Remige"
+version = "1.0.0"
+keywords = ["build system", "c"]
+
+readme = "README.md"
+
+requires-python = ">=3.12"
+dependencies = ["anstrip>=0.2,<0.3", "result>=0.17,<0.18"]
+
+[project.license]
+file = "LICENSE"
+
+[[project.authors]]
+name = "Qexat"
+email = "contact@qexat.com"
+
+[project.urls]
+# TODO: update with subdir
+repository = "https://github.com/qexat/remige"
+
+[project.scripts]
+ulna = "ulna.__main__:main"
+
+[build-system]
+requires = ["setuptools >= 75.0"]
+build-backend = "setuptools.build_meta"
