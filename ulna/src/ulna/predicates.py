@@ -69,11 +69,8 @@ def is_any_dict(
     return isinstance(value, dict)
 
 
-def _is_identifier_particle(particle: str) -> bool:
-    return all(
-        "A" <= char <= "Z" or "a" <= char <= "z" or char == "_"
-        for char in particle
-    )
+def _is_lowercase_letter_or_underscore(particle: str) -> bool:
+    return all("a" <= char <= "z" or char == "_" for char in particle)
 
 
 @make_predicate("project identifier")
@@ -85,9 +82,7 @@ def is_project_identifier(value: typing.Any) -> typing.TypeGuard[str]:
     if not isinstance(value, str):
         return False
 
-    particles = value.split("-")
-
-    return all(_is_identifier_particle(particle) for particle in particles)
+    return all(_is_lowercase_letter_or_underscore(char) for char in value)
 
 
 @make_predicate("compiler name")
