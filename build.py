@@ -23,10 +23,6 @@ if typing.TYPE_CHECKING:
 
     import _typeshed
 
-PROGRAM_NAME = "remige"
-DEPENDENCIES: list[str] = []
-ADDITIONAL_FLAGS: list[str] = []
-
 
 class _ProgramSection(typing.TypedDict, total=False):
     name: typing.Required[str]
