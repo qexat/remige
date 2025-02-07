@@ -6,85 +6,99 @@ file.
 from __future__ import annotations
 
 import dataclasses
+import typing
 
 import result
 import tomllib
 
+from . import datatypes
 from . import predicates
 from . import scheme
 from . import validator
 
+# XXX: error handling is super smelly.
+# TODO: make it nicer
+
 
 @dataclasses.dataclass(frozen=True)
-class ConfigFileNotFoundError:
+class ConfigFileNotFoundError(datatypes.AbstractError):
     """
     Error when the configuration file does not exist.
     """
 
+    path: str
+
+    @typing.override
+    def render_message(self) -> str:
+        return f"file {self.path!r} could not be found"
+
 
 @dataclasses.dataclass(frozen=True)
-class ConfigFilePermissionError:
+class ConfigFilePermissionError(datatypes.AbstractError):
     """
     Error when the configuration file does not have read
     permissions.
     """
 
+    path: str
+
+    @typing.override
+    def render_message(self) -> str:
+        return f"file {self.path!r} cannot be read (missing permissions)"
+
 
 @dataclasses.dataclass(frozen=True)
-class MalformedTOMLError:
+class MalformedTOMLError(datatypes.AbstractError):
     """
     Error when the configuration file's TOML is malformed.
     """
 
+    path: str
+
+    @typing.override
+    def render_message(self) -> str:
+        return f"file {self.path!r} is not valid TOML"
+
 
 @dataclasses.dataclass(slots=True, frozen=True)
-class InvalidConfigFileError:
+class InvalidConfigError:
     """
-    Error when the configuration file does not follow the
-    scheme.
+    Error when the configuration file is invalid.
     """
 
-    field_name: str
-    message: str
+    errors: list[validator.ValidationError]
 
 
 type LoadError = (
     ConfigFileNotFoundError
     | ConfigFilePermissionError
     | MalformedTOMLError
-    | InvalidConfigFileError
+    | InvalidConfigError
 )
 
 
-def get_error_message(path: str, error: LoadError) -> str:
+def get_error_messages(error: LoadError) -> list[str]:
     """
     Generate the error message given the `path` of the invalid
     configuration file and its `error` data.
     """
 
     match error:
-        case ConfigFileNotFoundError():
-            return f"file {path!r} could not be found"
-        case ConfigFilePermissionError():
-            return f"file {path!r} cannot be read (missing permissions)"
-        case MalformedTOMLError():
-            return f"file {path!r} is not valid TOML"
-        case InvalidConfigFileError(field_name, message):
-            return (
-                f"file {path!r} is an invalid configuration\n"
-                f"  {field_name}: {message}"
-            )
+        case InvalidConfigError(errors):
+            return [_error.render_message() for _error in errors]
+        case _:
+            return [error.render_message()]
 
 
 PROGRAM_SECTION_VALIDATOR = (
-    validator.Builder()
+    validator.Builder("program")
     .add_field("name", predicates.is_project_identifier)
     .add_field("description", predicates.is_string, optional=True)
     .build(for_type=scheme.ProgramSectionScheme)
 )
 
 DEPENDENCIES_SECTION_VALIDATOR = (
-    validator.Builder()
+    validator.Builder("dependencies")
     .add_field(
         "include_dirs",
         predicates.is_list_of_strings,
@@ -99,7 +113,7 @@ DEPENDENCIES_SECTION_VALIDATOR = (
 )
 
 BUILD_SECTION_VALIDATOR = (
-    validator.Builder()
+    validator.Builder("build")
     .add_field("compiler", predicates.is_compiler_name, optional=True)
     .add_field(
         "additional_flags",
@@ -111,13 +125,9 @@ BUILD_SECTION_VALIDATOR = (
 
 CONFIG_VALIDATOR = (
     validator.Builder()
-    .add_field("program", PROGRAM_SECTION_VALIDATOR.validate)
-    .add_field(
-        "dependencies",
-        DEPENDENCIES_SECTION_VALIDATOR.validate,
-        optional=True,
-    )
-    .add_field("build", BUILD_SECTION_VALIDATOR.validate, optional=True)
+    .add_section(PROGRAM_SECTION_VALIDATOR)
+    .add_section(DEPENDENCIES_SECTION_VALIDATOR, optional=True)
+    .add_section(BUILD_SECTION_VALIDATOR, optional=True)
     .build(for_type=scheme.ConfigurationScheme)
 )
 
@@ -134,26 +144,17 @@ def load(
         # we are using the context manager afterwards
         file = open(path, encoding="utf-8")  # noqa: SIM115
     except OSError:
-        return result.Err(ConfigFileNotFoundError())
+        return result.Err(ConfigFileNotFoundError(path))
 
     try:
         with file:
             raw_contents = file.read()
     except PermissionError:
-        return result.Err(ConfigFilePermissionError())
+        return result.Err(ConfigFilePermissionError(path))
 
     try:
         config = tomllib.loads(raw_contents)
     except tomllib.TOMLDecodeError:
-        return result.Err(MalformedTOMLError())
+        return result.Err(MalformedTOMLError(path))
 
-    if not CONFIG_VALIDATOR.validate(config):
-        # TODO: refine error message
-        return result.Err(
-            InvalidConfigFileError(
-                "unknown",
-                "invalid field",
-            )
-        )
-
-    return result.Ok(config)
+    return CONFIG_VALIDATOR.validate(config).map_err(InvalidConfigError)

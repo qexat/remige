@@ -48,12 +48,10 @@ class App:
 
         match config.load(config_path):
             case result.Err(error):
-                self.logger.error(
-                    config.get_error_message(
-                        config_path,
-                        error,
-                    )
-                )
+                messages = config.get_error_messages(error)
+
+                for message in messages:
+                    self.logger.error(message)
 
                 return 1
             case result.Ok(_config_):

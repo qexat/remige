@@ -5,7 +5,20 @@ Shared datatypes used across ulna.
 from __future__ import annotations
 
 import abc
+import dataclasses
 import typing
+
+
+class AbstractError(abc.ABC):
+    """
+    Represents an error that can be rendered into a message.
+    """
+
+    @abc.abstractmethod
+    def render_message(self) -> str:
+        """
+        Render the error into a printable message string.
+        """
 
 
 class Compiler(abc.ABC):
@@ -78,6 +91,19 @@ class Compiler(abc.ABC):
             build_mode_flags=build_mode_flags,
             additional_flags=_additional_flags_,
         )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class Predicate[T]:
+    """
+    Function that checks if a value is of type `T`.
+    """
+
+    name: str
+    function: typing.Callable[[typing.Any], typing.TypeGuard[T]]
+
+    def __call__(self, value: typing.Any, /) -> typing.TypeGuard[T]:  # noqa: D102
+        return self.function(value)
 
 
 class UlnaNamespace(typing.Protocol):
