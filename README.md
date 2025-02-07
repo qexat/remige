@@ -18,7 +18,6 @@ remige
 
 ### Builder options
 
-- `--compiler <NAME>`: selects the compiler to use to build Remige. Supported compilers: `gcc`. (default: `gcc`)
 - `--help`/`-h`: prints the builder options.
 - `--mode <MODE>`: this impacts the flags and arguments passed to the compiler. Supported modes: `release`, `development`. (default: `development`)
 - `--verbose`: shows more output. Useful if the compiler threw an error.
