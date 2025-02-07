@@ -207,7 +207,6 @@ PROGRAM_SECTION_VALIDATOR = (
 DEPENDENCIES_SECTION_VALIDATOR = (
     ValidatorBuilder()
     .add_field("include_dirs", _is_list_of_strings, optional=True)
-    .add_field("exclude_dirs", _is_list_of_strings, optional=True)
     .add_field("include_shared", _is_list_of_strings, optional=True)
     .build(for_type=_DependenciesSection)
 )
