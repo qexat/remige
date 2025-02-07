@@ -32,7 +32,7 @@ ulna build --verbose
 
 #### When I run `ulna build`, a `ModuleNotFoundError` error is shown
 
-1. Make sure you created a virtual environment.
+1. Make sure you have created a virtual environment.
 2. Verify that you have activated it ; a `VIRTUAL_ENV` environment variable should be set.
 3. Check that you have installed ulna in the virtual environment.
 
