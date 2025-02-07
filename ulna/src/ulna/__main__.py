@@ -47,11 +47,9 @@ class App:
         config_path = "ulna-project.toml"
 
         match config.load(config_path):
-            case result.Err(error):
-                messages = config.get_error_messages(error)
-
-                for message in messages:
-                    self.logger.error(message)
+            case result.Err(errors):
+                for error in errors:
+                    self.logger.error(error.render_message())
 
                 return 1
             case result.Ok(_config_):

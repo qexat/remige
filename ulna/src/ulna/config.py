@@ -60,34 +60,12 @@ class MalformedTOMLError(datatypes.AbstractError):
         return f"file {self.path!r} is not valid TOML"
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class InvalidConfigError:
-    """
-    Error when the configuration file is invalid.
-    """
-
-    errors: list[validator.ValidationError]
-
-
 type LoadError = (
     ConfigFileNotFoundError
     | ConfigFilePermissionError
     | MalformedTOMLError
-    | InvalidConfigError
+    | validator.ValidationError
 )
-
-
-def get_error_messages(error: LoadError) -> list[str]:
-    """
-    Generate the error message given the `path` of the invalid
-    configuration file and its `error` data.
-    """
-
-    match error:
-        case InvalidConfigError(errors):
-            return [_error.render_message() for _error in errors]
-        case _:
-            return [error.render_message()]
 
 
 PROGRAM_SECTION_VALIDATOR = (
@@ -134,7 +112,7 @@ CONFIG_VALIDATOR = (
 
 def load(
     path: str,
-) -> result.Result[scheme.ConfigurationScheme, LoadError]:
+) -> result.Result[scheme.ConfigurationScheme, frozenset[LoadError]]:
     """
     Read, load and validate the configuration file at the given
     `path`.
@@ -144,17 +122,17 @@ def load(
         # we are using the context manager afterwards
         file = open(path, encoding="utf-8")  # noqa: SIM115
     except OSError:
-        return result.Err(ConfigFileNotFoundError(path))
+        return result.Err(frozenset({ConfigFileNotFoundError(path)}))
 
     try:
         with file:
             raw_contents = file.read()
     except PermissionError:
-        return result.Err(ConfigFilePermissionError(path))
+        return result.Err(frozenset({ConfigFilePermissionError(path)}))
 
     try:
         config = tomllib.loads(raw_contents)
     except tomllib.TOMLDecodeError:
-        return result.Err(MalformedTOMLError(path))
+        return result.Err(frozenset({MalformedTOMLError(path)}))
 
-    return CONFIG_VALIDATOR.validate(config).map_err(InvalidConfigError)
+    return CONFIG_VALIDATOR.validate(config).map_err(frozenset)
