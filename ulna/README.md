@@ -36,7 +36,7 @@ ulna can build simple C projects that have a `ulna-project.toml` at their root.
 
 `program.name` is the only field required.
 
-```toml
+```txt
 [program]
 name : identifier  # required
 description : string
