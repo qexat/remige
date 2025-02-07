@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import abc
 import argparse
+import contextlib
 import os
 import subprocess
 import sys
@@ -15,13 +16,223 @@ import textwrap
 import typing
 
 import anstrip
+import tomllib
 
 if typing.TYPE_CHECKING:
+    import collections.abc
+
     import _typeshed
 
 PROGRAM_NAME = "remige"
 DEPENDENCIES: list[str] = []
 ADDITIONAL_FLAGS: list[str] = []
+
+
+class _ProgramSection(typing.TypedDict, total=False):
+    name: typing.Required[str]
+    description: str
+
+
+class _DependenciesSection(typing.TypedDict, total=False):
+    include_dirs: list[str]
+    exclude_dirs: list[str]
+    include_headers: list[str]
+    include_shared: list[str]
+
+
+class _BuildSection(typing.TypedDict, total=False):
+    compiler: CompilerName
+    additional_flags: list[str]
+
+
+class ConfigScheme(typing.TypedDict, total=False):
+    """
+    Typed interface for a valid configuration file.
+    """
+
+    program: typing.Required[_ProgramSection]
+    dependencies: _DependenciesSection
+    build: _BuildSection
+
+
+class ValidationField(typing.NamedTuple):
+    """
+    Represents a TOML field to validate.
+    """
+
+    name: str
+    validator: typing.Callable[[typing.Any], bool]
+    optional: bool
+
+
+class Validator[T]:
+    """
+    Handles validation of the `T` node given a dumb value,
+    usually extracted from parsing the TOML config file.
+    """
+
+    def __init__(
+        self,
+        fields: collections.abc.Iterable[ValidationField],
+        *,
+        for_type: type[T],
+    ) -> None:
+        self._fields = fields
+        self._for_type = for_type
+
+    @staticmethod
+    def _check_field(
+        field: typing.Any | None,
+        validator: typing.Callable[[typing.Any], bool],
+        *,
+        optional: bool = False,
+    ) -> bool:
+        if field is None:
+            return optional
+
+        return validator(field)
+
+    def validate(self, value: typing.Any) -> typing.TypeGuard[T]:
+        """
+        Return whether `value` is a valid `T` node.
+        """
+
+        if not _is_any_dict(value):
+            return False
+
+        for field in self._fields:
+            if not self._check_field(
+                value.get(field.name),
+                field.validator,
+                optional=field.optional,
+            ):
+                return False
+
+        return True
+
+
+class ValidatorBuilder:
+    """
+    Builder for a node validator.
+
+    Each method returns the builder so it can be chained.
+    """
+
+    def __init__(self) -> None:
+        self._fields: list[ValidationField] = []
+
+    def _add_field(
+        self,
+        name: str,
+        validator: typing.Callable[[typing.Any], bool],
+        *,
+        optional: bool,
+    ) -> None:
+        self._fields.append(
+            ValidationField(
+                name,
+                validator,
+                optional=optional,
+            )
+        )
+
+    def add_field(
+        self,
+        name: str,
+        validator: typing.Callable[[typing.Any], bool],
+        *,
+        optional: bool = False,
+    ) -> typing.Self:
+        """
+        Add a validation field given its `name`, a `validator`
+        function that verifies that the field itself is valid,
+        and whether it is `optional` or not.
+        """
+
+        self._add_field(name, validator, optional=optional)
+
+        return self
+
+    def build[T](self, *, for_type: type[T]) -> Validator[T]:
+        """
+        Construct the node validator for the type `T` and return
+        it.
+
+        This cannot be enforced, but `T` should be a subclass of
+        `typing.TypedDict`.
+        """
+
+        return Validator(self._fields, for_type=for_type)
+
+
+def _is_identifier(value: typing.Any) -> typing.TypeGuard[str]:
+    return isinstance(value, str) and value.isidentifier()
+
+
+def _is_string(value: typing.Any) -> typing.TypeGuard[str]:
+    return isinstance(value, str)
+
+
+def _is_list_of[ItemT](
+    value: typing.Any,
+    *,
+    item_type: type[ItemT],
+) -> typing.TypeGuard[list[ItemT]]:
+    return isinstance(value, list) and all(
+        isinstance(item, item_type)
+        for item in typing.cast("list[typing.Any]", value)
+    )
+
+
+def _is_list_of_strings(
+    value: typing.Any,
+) -> typing.TypeGuard[list[str]]:
+    return _is_list_of(value, item_type=str)
+
+
+def _is_any_dict(
+    value: typing.Any,
+) -> typing.TypeGuard[dict[typing.Any, typing.Any]]:
+    return isinstance(value, dict)
+
+
+def _is_valid_compiler_name(
+    value: typing.Any,
+) -> typing.TypeGuard[CompilerName]:
+    return value == "gcc"
+
+
+PROGRAM_SECTION_VALIDATOR = (
+    ValidatorBuilder()
+    .add_field("name", _is_identifier)
+    .add_field("description", _is_string, optional=True)
+    .build(for_type=_ProgramSection)
+)
+DEPENDENCIES_SECTION_VALIDATOR = (
+    ValidatorBuilder()
+    .add_field("include_dirs", _is_list_of_strings, optional=True)
+    .add_field("exclude_dirs", _is_list_of_strings, optional=True)
+    .add_field("include_headers", _is_list_of_strings, optional=True)
+    .add_field("include_shared", _is_list_of_strings, optional=True)
+    .build(for_type=_DependenciesSection)
+)
+BUILD_SECTION_VALIDATOR = (
+    ValidatorBuilder()
+    .add_field("compiler", _is_valid_compiler_name, optional=True)
+    .add_field("additional_flags", _is_list_of_strings, optional=True)
+    .build(for_type=_BuildSection)
+)
+CONFIG_VALIDATOR = (
+    ValidatorBuilder()
+    .add_field("program", PROGRAM_SECTION_VALIDATOR.validate)
+    .add_field(
+        "dependencies",
+        DEPENDENCIES_SECTION_VALIDATOR.validate,
+        optional=True,
+    )
+    .add_field("build", BUILD_SECTION_VALIDATOR.validate, optional=True)
+    .build(for_type=ConfigScheme)
+)
 
 
 class Compiler(abc.ABC):
@@ -153,11 +364,7 @@ def create_parser() -> argparse.ArgumentParser:
         choices=BUILD_MODE_OPTIONS,
         default=BUILD_MODE_DEFAULT,
     )
-    _ = parser.add_argument(
-        "--compiler",
-        choices=COMPILER_OPTIONS,
-        default=COMPILER_DEFAULT,
-    )
+
     _ = parser.add_argument(
         "--verbose",
         action="store_true",
@@ -172,13 +379,12 @@ class BuildOptions(typing.Protocol):
     """
 
     mode: BuildMode
-    compiler: CompilerName
     verbose: bool
 
 
 class BuildLogger:
     """
-    Logger of the build script.
+    Logger of Ulna.
     """
 
     def __init__(
@@ -208,21 +414,6 @@ class BuildLogger:
         for line in message.splitlines():
             anstrip.print(self._make_line("error", 1, line), file=self.err)
 
-    def error_verbose(
-        self,
-        message: str,
-        *,
-        fallback_hint: str | None = None,
-    ) -> None:
-        """
-        Log an error if the verbose mode is on.
-        """
-
-        if self.verbose:
-            self.error(message)
-        elif fallback_hint is not None:
-            self.hint(fallback_hint)
-
     def warn(self, message: str) -> None:
         """
         Log a warning.
@@ -239,6 +430,9 @@ class BuildLogger:
         Log some information.
         """
 
+        if not self.verbose:
+            return
+
         for line in message.splitlines():
             anstrip.print(self._make_line("info", 4, line), file=self.out)
 
@@ -251,6 +445,41 @@ class BuildLogger:
             anstrip.print(self._make_line("hint", 5, line), file=self.out)
 
 
+# TODO: this function does too much work
+def read_config(path: str) -> ConfigScheme | None:
+    """
+    Read the config from `path` and validate it.
+    """
+
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            raw_contents = file.read()
+    except OSError:
+        return None
+
+    try:
+        config = tomllib.loads(raw_contents)
+    except tomllib.TOMLDecodeError:
+        return None
+
+    if not CONFIG_VALIDATOR.validate(config):
+        return None
+
+    return config
+
+
+# XXX: this function has a confusing job
+def clean(program_name: str, path: str) -> None:
+    """
+    Clean artifacts and binaries upon build failure.
+    """
+
+    with contextlib.suppress(OSError):
+        os.remove(f"{path}/{program_name}")
+
+
+# TODO: this function does too much work
+# TODO: make it a class
 def build(options: BuildOptions) -> int:
     """
     Core function to build Remige.
@@ -263,18 +492,34 @@ def build(options: BuildOptions) -> int:
         logger.error("no virtual environment detected")
         return 1
 
-    compiler = COMPILER_OPTIONS[options.compiler]
+    config = read_config("project.toml")
+
+    if config is None:
+        logger.error("configuration file is invalid or could not be found")
+        return 1
+
+    program_name = config["program"]["name"]
+    binary_dir = f"{venv_path}/bin"
+
+    # TODO: handle other dependencies as well
+    dependencies = config.get("dependencies", {})
+    shared_object_dependencies = dependencies.get("include_shared", [])
+
+    build_options = config.get("build", {})
+    compiler_name = build_options.get("compiler", COMPILER_DEFAULT)
+    additional_flags = build_options.get("additional_flags", [])
+
+    compiler = COMPILER_OPTIONS[compiler_name]
     command = compiler.generate_command(
         "program",
-        PROGRAM_NAME,
+        program_name,
         mode=options.mode,
-        binary_dir=f"{venv_path}/bin",
-        dependencies=DEPENDENCIES,
-        additional_flags=ADDITIONAL_FLAGS,
+        binary_dir=binary_dir,
+        dependencies=shared_object_dependencies,
+        additional_flags=additional_flags,
     )
 
-    if options.verbose:
-        logger.info(command)
+    logger.info(command)
 
     completed = subprocess.run(  # noqa: S603
         command.split(),
@@ -284,12 +529,9 @@ def build(options: BuildOptions) -> int:
 
     if completed.returncode != 0:
         logger.error("Remige failed to build")
+        logger.error(textwrap.indent(completed.stderr.decode(), "| "))
 
-        hint = f"Pass --verbose to show {options.compiler}'s output"
-        logger.error_verbose(
-            textwrap.indent(completed.stderr.decode(), "| "),
-            fallback_hint=hint,
-        )
+        clean(program_name, binary_dir)
 
         return 1
 
