@@ -30,12 +30,12 @@ ulna build --verbose
 
 ### Troubleshooting
 
-#### When I run `build.py`, a `ModuleNotFoundError` error is shown
+#### When I run `ulna build`, a `ModuleNotFoundError` error is shown
 
 1. Make sure you created a virtual environment.
 2. Verify that you have activated it ; a `VIRTUAL_ENV` environment variable should be set.
-3. Check that you have installed the builder dependencies in the virtual environment.
+3. Check that you have installed ulna in the virtual environment.
 
-#### When I run `build.py`, it errors with the message "no virtual environment detected"
+#### When I run `ulna build`, it errors with the message "no virtual environment detected"
 
-This means that `build.py` was unable to find the `VIRTUAL_ENV` environment variable. Make sure that it is indeed set, and that you don't have any program that might interfere or change the environment in the background.
+This means that ulna was unable to find the `VIRTUAL_ENV` environment variable. Make sure that it is indeed set, and that you don't have any program that might interfere or change the environment in the background.
