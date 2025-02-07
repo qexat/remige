@@ -31,8 +31,6 @@ class _ProgramSection(typing.TypedDict, total=False):
 
 class _DependenciesSection(typing.TypedDict, total=False):
     include_dirs: list[str]
-    exclude_dirs: list[str]
-    include_headers: list[str]
     include_shared: list[str]
 
 
