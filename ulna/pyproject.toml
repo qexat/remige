@@ -1,7 +1,7 @@
 [project]
 name = "ulna"
 description = "A simple build system for Remige"
-version = "1.0.0"
+version = "0.1.0"
 keywords = ["build system", "c"]
 
 readme = "README.md"
