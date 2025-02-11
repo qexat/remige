@@ -1,3 +1,6 @@
 [program]
 name = "remige"
 description = "some interpreter maybe"
+
+[dependencies]
+include_dirs = [3]

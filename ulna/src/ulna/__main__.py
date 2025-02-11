@@ -11,6 +11,8 @@ import typing
 
 import result
 
+from ulna import typesys_old
+
 from . import builder
 from . import config
 from . import datatypes
@@ -46,7 +48,22 @@ class App:
 
         config_path = "ulna-project.toml"
 
-        match config.load(config_path):
+        match config.load_toml(config_path):
+            case result.Err(error):
+                self.logger.error(error.render_message())
+
+                return 1
+            case result.Ok(toml_data):
+                pass  # awkward
+
+        self.logger.info("EXPERIMENTAL: type-checking based validation")
+
+        if typesys_old.Config.check(toml_data):
+            self.logger.info("type-checking passed")
+        else:
+            self.logger.info("type-checking failed")
+
+        match config.validate(toml_data):  # pyright: ignore[reportArgumentType]
             case result.Err(errors):
                 for error in errors:
                     self.logger.error(error.render_message())

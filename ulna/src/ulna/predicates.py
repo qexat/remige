@@ -28,7 +28,15 @@ def is_string(value: typing.Any) -> typing.TypeGuard[str]:
     Determine whether `value` is a string.
     """
 
-    return isinstance(value, str)
+    return type(value) is str
+
+
+def is_list(value: typing.Any) -> typing.TypeGuard[list[typing.Any]]:
+    """
+    Determine whether `value` is a list.
+    """
+
+    return type(value) is list
 
 
 def _is_list_of[ItemT](
@@ -41,8 +49,8 @@ def _is_list_of[ItemT](
     `item_type`.
     """
 
-    return isinstance(value, list) and all(
-        isinstance(item, item_type)
+    return type(value) is list and all(
+        type(item) is item_type
         for item in typing.cast("list[typing.Any]", value)
     )
 
@@ -66,7 +74,7 @@ def is_any_dict(
     key and value types.
     """
 
-    return isinstance(value, dict)
+    return type(value) is dict
 
 
 def _is_lowercase_letter_or_underscore(particle: str) -> bool:

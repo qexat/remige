@@ -64,7 +64,6 @@ type LoadError = (
     ConfigFileNotFoundError
     | ConfigFilePermissionError
     | MalformedTOMLError
-    | validator.ValidationError
 )
 
 
@@ -110,29 +109,42 @@ CONFIG_VALIDATOR = (
 )
 
 
-def load(
+def load_toml(
     path: str,
-) -> result.Result[scheme.ConfigurationScheme, frozenset[LoadError]]:
+) -> result.Result[dict[str, typing.Any], LoadError]:
     """
-    Read, load and validate the configuration file at the given
-    `path`.
+    Load the TOML configuration file at the given `path`.
+
+    ⚠️ It still needs to be checked against ulna's scheme!
     """
 
     try:
         # we are using the context manager afterwards
         file = open(path, encoding="utf-8")  # noqa: SIM115
     except OSError:
-        return result.Err(frozenset({ConfigFileNotFoundError(path)}))
+        return result.Err(ConfigFileNotFoundError(path))
 
     try:
         with file:
             raw_contents = file.read()
     except PermissionError:
-        return result.Err(frozenset({ConfigFilePermissionError(path)}))
+        return result.Err(ConfigFilePermissionError(path))
 
     try:
-        config = tomllib.loads(raw_contents)
+        toml_data = tomllib.loads(raw_contents)
     except tomllib.TOMLDecodeError:
-        return result.Err(frozenset({MalformedTOMLError(path)}))
+        return result.Err(MalformedTOMLError(path))
 
-    return CONFIG_VALIDATOR.validate(config).map_err(frozenset)
+    return result.Ok(toml_data)
+
+
+def validate(
+    toml_data: dict[str, typing.Any],
+) -> result.Result[
+    scheme.ConfigurationScheme, list[validator.ValidationError]
+]:
+    """
+    Validate `toml_data` that was extracted from a configuration file.
+    """
+
+    return CONFIG_VALIDATOR.validate(toml_data)
